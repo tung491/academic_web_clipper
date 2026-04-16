@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <div id="ieee-view" style="display:none;">
+      <h2 id="paper-title">Detecting paper...</h2>
+      <label for="save-path">Save path:</label>
+      <input type="text" id="save-path" placeholder="Papers/">
+      <button id="clip-btn">Clip Paper</button>
+      <div id="progress" style="display:none;">
+        <span id="progress-text"></span>
+      </div>
+      <div id="result" style="display:none;"></div>
+    </div>
+    <div id="non-ieee-view" style="display:none;">
+      <p>Navigate to an IEEE Xplore paper to clip it.</p>
+    </div>
+    <div class="footer">
+      <a href="#" id="settings-link">Settings</a>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
