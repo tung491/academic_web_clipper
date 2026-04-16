@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Academic Web Clipper — Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div id="app">
+    <h1>Academic Web Clipper Settings</h1>
+    <label for="default-path">Default save path (relative to Downloads):</label>
+    <input type="text" id="default-path" placeholder="Papers">
+    <p class="hint">Files are saved within Chrome's Downloads directory. To save directly to your Obsidian vault, set Chrome's download location to your vault path or create a symlink.</p>
+    <button id="save-btn">Save</button>
+    <div id="status" style="display:none;"></div>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>
