@@ -90,6 +90,18 @@ function extractSections() {
       }
     });
 
+    // Tables within this section
+    sectionEl.querySelectorAll('.article-table-content-wrapper').forEach(function(wrapper) {
+      var captionEl = wrapper.closest('.article-table-content')?.querySelector('.article-table-caption, .table-caption__label');
+      var caption = captionEl?.textContent?.trim() || '';
+      var table = wrapper.querySelector('table');
+      if (table) {
+        var tableText = extractTableAsText(table);
+        if (caption) tableText = caption + '\n' + tableText;
+        if (tableText) content.push({ type: 'paragraph', text: tableText });
+      }
+    });
+
     if (content.length > 0) sections.push({ heading: heading, content: content });
   });
 
@@ -148,4 +160,16 @@ async function extractFigures() {
 
   window.scrollTo(0, 0);
   return figures;
+}
+
+function extractTableAsText(table) {
+  var rows = [];
+  table.querySelectorAll('tr').forEach(function(tr) {
+    var cells = [];
+    tr.querySelectorAll('th, td').forEach(function(cell) {
+      cells.push(cell.textContent.trim());
+    });
+    rows.push(cells.join(' | '));
+  });
+  return rows.join('\n');
 }
