@@ -81,10 +81,10 @@ function extractSections() {
       }
     });
 
-    // Tables
-    sectionEl.querySelectorAll('.tableWrapper table, .NLM_table-wrap table, table.NLM_table').forEach(function(table) {
+    // Tables — T&F uses various wrappers or bare table.listgroup
+    sectionEl.querySelectorAll('table').forEach(function(table) {
       var wrap = table.closest('.tableWrapper, .NLM_table-wrap');
-      var captionEl = wrap?.querySelector('.NLM_caption, caption, .table-caption');
+      var captionEl = wrap?.querySelector('.NLM_caption, caption, .table-caption') || table.querySelector('caption');
       var caption = captionEl?.textContent?.trim() || '';
       var tableText = extractTableAsText(table);
       if (caption) tableText = caption + '\n' + tableText;
