@@ -57,43 +57,46 @@ function extractSections() {
     });
   }
 
-  // Use only top-level sections; querySelectorAll within each captures nested content
-  var sectionSelector = document.querySelectorAll('.NLM_sec_level_1').length > 0
-    ? '.NLM_sec_level_1' : '.NLM_sec';
-  document.querySelectorAll(sectionSelector).forEach(function(sectionEl) {
-    if (sectionEl.closest('.abstractSection') || sectionEl.classList.contains('abstractSection')) return;
+  // Walk the full-text body in document order — more robust than matching nested sections
+  var bodyEl = document.querySelector('.hlFld-Fulltext') || document.querySelector('.article__body');
+  if (bodyEl) {
+    var currentHeading = 'Introduction';
+    var currentContent = [];
 
-    var headingEl = sectionEl.querySelector('h2, h3, .sectionTitle, .NLM_title');
-    var heading = headingEl?.textContent?.trim() || 'Untitled Section';
+    var flush = function() {
+      if (currentContent.length > 0) {
+        sections.push({ heading: currentHeading, content: currentContent });
+      }
+      currentContent = [];
+    };
 
-    if (/acknowledgment|disclosure|funding/i.test(heading)) return;
+    bodyEl.querySelectorAll('h2, h3, p, .NLM_p, table, img[src*="cms/asset"]').forEach(function(el) {
+      if (el.closest('.abstractSection')) return;
 
-    var content = [];
-    sectionEl.querySelectorAll('p, .NLM_p').forEach(function(p) {
-      if (p.closest('.abstractSection')) return;
-      var text = p.textContent.trim();
-      if (text && text.length > 10) content.push({ type: 'paragraph', text: text });
-    });
+      var tag = el.tagName;
 
-    // Figures — T&F uses .figureView divs or imgs with cms/asset URLs
-    sectionEl.querySelectorAll('.figureView img, img[src*="cms/asset"]').forEach(function(img) {
-      if (img.src && img.src.includes('cms/asset')) {
-        content.push({ type: 'figure', figureId: img.src });
+      if (tag === 'H2' || tag === 'H3') {
+        flush();
+        currentHeading = el.textContent.trim() || 'Untitled Section';
+      } else if (tag === 'P' || el.classList.contains('NLM_p')) {
+        var text = el.textContent.trim();
+        if (text && text.length > 10) {
+          currentContent.push({ type: 'paragraph', text: text });
+        }
+      } else if (tag === 'TABLE') {
+        var captionEl = el.querySelector('caption') ||
+          el.closest('.NLM_table-wrap, .tableWrapper')?.querySelector('.NLM_caption, .table-caption');
+        var caption = captionEl?.textContent?.trim() || '';
+        var tableText = extractTableAsText(el);
+        if (caption) tableText = caption + '\n' + tableText;
+        if (tableText) currentContent.push({ type: 'paragraph', text: tableText });
+      } else if (tag === 'IMG' && el.src && el.src.includes('cms/asset')) {
+        currentContent.push({ type: 'figure', figureId: el.src });
       }
     });
 
-    // Tables — T&F uses various wrappers or bare table.listgroup
-    sectionEl.querySelectorAll('table').forEach(function(table) {
-      var wrap = table.closest('.tableWrapper, .NLM_table-wrap');
-      var captionEl = wrap?.querySelector('.NLM_caption, caption, .table-caption') || table.querySelector('caption');
-      var caption = captionEl?.textContent?.trim() || '';
-      var tableText = extractTableAsText(table);
-      if (caption) tableText = caption + '\n' + tableText;
-      if (tableText) content.push({ type: 'paragraph', text: tableText });
-    });
-
-    if (content.length > 0) sections.push({ heading: heading, content: content });
-  });
+    flush();
+  }
 
   // References
   var refEls = document.querySelectorAll('.references li, .citedByEntry, #references-section li');
