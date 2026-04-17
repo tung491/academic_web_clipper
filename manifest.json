@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Academic Web Clipper",
   "version": "1.0.0",
-  "description": "Clip IEEE Xplore papers to Obsidian-compatible markdown",
+  "description": "Clip academic papers to Obsidian-compatible markdown",
   "permissions": [
     "activeTab",
     "scripting",
@@ -10,7 +10,13 @@
     "storage"
   ],
   "host_permissions": [
-    "*://ieeexplore.ieee.org/*"
+    "*://ieeexplore.ieee.org/*",
+    "*://arxiv.org/*",
+    "*://link.springer.com/*",
+    "*://dl.acm.org/*",
+    "*://www.sciencedirect.com/*",
+    "*://www.mdpi.com/*",
+    "*://hal.science/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
