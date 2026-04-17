@@ -142,19 +142,14 @@ async function extractFigures() {
     }
 
     const index = figures.length + 1;
-    const ext = src.match(/\.(png|jpg|jpeg|gif|svg|webp)/i)?.[1] || 'png';
-    const filename = `fig${index}.${ext}`;
+    const filename = `fig${index}.png`;
 
-    // Fetch image data — try full-size first, fall back to original
+    // Fetch image and convert to PNG via canvas
     let dataUrl = null;
     for (const url of [fullSizeUrl, src]) {
       try {
-        const response = await fetch(url, { credentials: 'include' });
-        if (response.ok) {
-          const blob = await response.blob();
-          dataUrl = await blobToBase64(blob);
-          break;
-        }
+        dataUrl = await fetchAndConvertToPng(url);
+        if (dataUrl) break;
       } catch (err) {
         // Try next URL
       }
@@ -170,11 +165,19 @@ async function extractFigures() {
   return figures;
 }
 
-function blobToBase64(blob) {
+function fetchAndConvertToPng(url) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+    const img = new Image();
+    img.crossOrigin = 'use-credentials';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => reject(new Error(`Failed to load: ${url}`));
+    img.src = url;
   });
 }
