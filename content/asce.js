@@ -24,9 +24,15 @@ function extractMetadata() {
       .map(function(el) { return el.content.trim(); }).filter(Boolean);
   }
 
-  var abstractEl =
-    document.querySelector('.article__abstract p, .abstractSection p, #abstract p');
-  var abstract = abstractEl?.textContent?.trim() || '';
+  // Abstract — ASCE uses a section with h2 "Abstract" and a div child
+  var abstract = '';
+  document.querySelectorAll('section').forEach(function(sec) {
+    var h = sec.querySelector('h2');
+    if (h && /^abstract$/i.test(h.textContent.trim())) {
+      var div = sec.querySelector('div');
+      if (div) abstract = div.textContent.trim();
+    }
+  });
 
   var doi = document.querySelector('meta[name="citation_doi"]')?.content || '';
   var date = document.querySelector('meta[name="citation_publication_date"]')?.content || '';
@@ -44,60 +50,58 @@ function extractMetadata() {
 function extractSections() {
   var sections = [];
 
-  var abstractEl =
-    document.querySelector('.article__abstract p, .abstractSection p, #abstract p');
-  if (abstractEl) {
-    sections.push({
-      heading: 'Abstract',
-      content: [{ type: 'paragraph', text: abstractEl.textContent.trim() }]
-    });
-  }
+  // ASCE uses bare <section> elements inside div.core-container
+  // Each section has an <h2> heading and <div> children for content
+  var container = document.querySelector('div.core-container');
+  if (!container) return sections;
 
-  // ASCE uses .article__section or .NLM_sec patterns (Atypon platform)
-  document.querySelectorAll('.article__section, .NLM_sec_level_1, .hlFld-Fulltext > div[class*="sec"]').forEach(function(sectionEl) {
-    if (sectionEl.closest('.abstractSection') || sectionEl.classList.contains('abstractSection')) return;
+  container.querySelectorAll('section').forEach(function(sec) {
+    var h2 = sec.querySelector('h2');
+    if (!h2) return;
 
-    var headingEl = sectionEl.querySelector('h2, h3, .section__title, .NLM_title');
-    var heading = headingEl?.textContent?.trim() || 'Untitled Section';
+    var heading = h2.textContent.trim();
 
-    if (/acknowledgment|data availability|author contribution/i.test(heading)) return;
+    // Skip non-content sections
+    if (/data availability|acknowledgment|author contribution|supplemental/i.test(heading)) return;
 
     var content = [];
-    sectionEl.querySelectorAll('p, .NLM_p').forEach(function(p) {
-      if (p.closest('.abstractSection')) return;
-      var text = p.textContent.trim();
-      if (text && text.length > 10) content.push({ type: 'paragraph', text: text });
-    });
 
-    sectionEl.querySelectorAll('figure').forEach(function(fig) {
-      var img = fig.querySelector('img');
-      if (img && img.src) {
-        content.push({ type: 'figure', figureId: img.src });
+    // Walk children of the section, skipping the h2
+    [...sec.children].forEach(function(child) {
+      if (child.tagName === 'H2' || child.tagName === 'H3') return;
+
+      if (child.tagName === 'FIGURE' || child.querySelector?.('figure')) {
+        var img = child.tagName === 'FIGURE' ? child.querySelector('img') : child.querySelector('figure img');
+        if (img && img.src) {
+          content.push({ type: 'figure', figureId: img.src });
+        }
+        var captionText = (child.tagName === 'FIGURE' ? child : child.querySelector('figure'))?.querySelector('figcaption')?.textContent?.trim();
+        if (captionText) {
+          content.push({ type: 'paragraph', text: captionText });
+        }
+        return;
+      }
+
+      if (child.tagName === 'TABLE' || child.querySelector?.('table')) {
+        var table = child.tagName === 'TABLE' ? child : child.querySelector('table');
+        if (table && table.querySelectorAll('tr').length >= 2) {
+          var tableText = extractTableAsText(table);
+          if (tableText) content.push({ type: 'paragraph', text: tableText });
+        }
+        return;
+      }
+
+      // Text content — divs, p, or other elements
+      var text = child.textContent.trim();
+      if (text && text.length > 10) {
+        content.push({ type: 'paragraph', text: text });
       }
     });
 
-    // Tables
-    sectionEl.querySelectorAll('.tableWrapper table, .NLM_table-wrap table, table').forEach(function(table) {
-      if (table.closest('figure')) return;
-      var wrap = table.closest('.tableWrapper, .NLM_table-wrap');
-      var captionEl = wrap?.querySelector('.NLM_caption, caption, .table-caption');
-      var caption = captionEl?.textContent?.trim() || '';
-      var tableText = extractTableAsText(table);
-      if (caption) tableText = caption + '\n' + tableText;
-      if (tableText) content.push({ type: 'paragraph', text: tableText });
-    });
-
-    if (content.length > 0) sections.push({ heading: heading, content: content });
+    if (content.length > 0) {
+      sections.push({ heading: heading, content: content });
+    }
   });
-
-  // References
-  var refEls = document.querySelectorAll('.references__item, .references li, #references-section li, .article__references li');
-  if (refEls.length > 0) {
-    var refContent = [...refEls].map(function(ref, i) {
-      return { type: 'paragraph', text: (i + 1) + '. ' + ref.textContent.trim() };
-    });
-    sections.push({ heading: 'References', content: refContent });
-  }
 
   return sections;
 }
@@ -105,7 +109,7 @@ function extractSections() {
 async function extractFigures() {
   var figures = [];
   var seen = new Set();
-  var figEls = document.querySelectorAll('figure img, .figure img');
+  var figEls = document.querySelectorAll('figure img');
 
   for (var img of figEls) {
     var src = img.getAttribute('data-src') || img.src;
