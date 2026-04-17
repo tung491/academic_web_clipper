@@ -36,11 +36,31 @@ function fetchAndConvertToPng(url) {
 
 function fetchAsDataUrl(url) {
   return fetch(url, { credentials: 'include' })
-    .then(r => r.blob())
-    .then(blob => new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    }));
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const ct = r.headers.get('content-type') || '';
+      if (!ct.startsWith('image/')) throw new Error(`Not an image: ${ct}`);
+      return r.blob();
+    })
+    .then(blob => convertBlobToPngDataUrl(blob));
+}
+
+function convertBlobToPngDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const imgEl = new Image();
+    const blobUrl = URL.createObjectURL(blob);
+    imgEl.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = imgEl.naturalWidth;
+      canvas.height = imgEl.naturalHeight;
+      canvas.getContext('2d').drawImage(imgEl, 0, 0);
+      URL.revokeObjectURL(blobUrl);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    imgEl.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      reject(new Error('Failed to decode image blob'));
+    };
+    imgEl.src = blobUrl;
+  });
 }
