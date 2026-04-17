@@ -40,8 +40,8 @@ async function extractPopupTables() {
     // Count tables before clicking
     var tablesBefore = document.querySelectorAll('table').length;
 
-    // Click to open popup
-    link.el.click();
+    // Simulate real mouse click (T&F handlers may ignore synthetic .click())
+    link.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
 
     // Wait for a new table or popup to appear
     var newTable = await waitForNewTable(tablesBefore);
@@ -53,16 +53,14 @@ async function extractPopupTables() {
       }
     }
 
-    // Close the popup — look for close button
-    var closeBtn = document.querySelector('.mfp-close, .popup-close, [class*="close"], button[aria-label="Close"]');
+    // Close the popup
+    var closeBtn = document.querySelector('button.modal-close') || document.querySelector('button.ref-close');
     if (closeBtn) {
-      closeBtn.click();
-      await new Promise(function(r) { setTimeout(r, 500); });
+      closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
     } else {
-      // Press Escape to close
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27 }));
-      await new Promise(function(r) { setTimeout(r, 500); });
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
     }
+    await new Promise(function(r) { setTimeout(r, 800); });
   }
 
   return results;
