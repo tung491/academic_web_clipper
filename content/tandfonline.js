@@ -70,8 +70,10 @@ function extractSections() {
       currentContent = [];
     };
 
-    bodyEl.querySelectorAll('h2, h3, p, .NLM_p, table, img[src*="cms/asset"]').forEach(function(el) {
+    bodyEl.querySelectorAll('h2, h3, p, .NLM_p, img[src*="cms/asset"]').forEach(function(el) {
       if (el.closest('.abstractSection')) return;
+      // Skip paragraphs inside tables — tables are handled separately
+      if (el.closest('table')) return;
 
       var tag = el.tagName;
 
@@ -83,19 +85,36 @@ function extractSections() {
         if (text && text.length > 10) {
           currentContent.push({ type: 'paragraph', text: text });
         }
-      } else if (tag === 'TABLE') {
-        var captionEl = el.querySelector('caption') ||
-          el.closest('.NLM_table-wrap, .tableWrapper')?.querySelector('.NLM_caption, .table-caption');
-        var caption = captionEl?.textContent?.trim() || '';
-        var tableText = extractTableAsText(el);
-        if (caption) tableText = caption + '\n' + tableText;
-        if (tableText) currentContent.push({ type: 'paragraph', text: tableText });
       } else if (tag === 'IMG' && el.src && el.src.includes('cms/asset')) {
         currentContent.push({ type: 'figure', figureId: el.src });
       }
     });
 
     flush();
+  }
+
+  // Tables — separate pass to avoid querySelectorAll ordering issues with nested <p>
+  var tableBodyEl = document.querySelector('.hlFld-Fulltext') || document.querySelector('.article__body');
+  if (tableBodyEl) {
+    tableBodyEl.querySelectorAll('table').forEach(function(table) {
+      var tableText = extractTableAsText(table);
+      if (!tableText) return;
+
+      var captionEl = table.querySelector('caption') ||
+        table.closest('.NLM_table-wrap, .tableWrapper')?.querySelector('.NLM_caption, .table-caption');
+      var caption = captionEl?.textContent?.trim() || '';
+      if (caption) tableText = caption + '\n' + tableText;
+
+      // Find nearest preceding heading for context
+      var heading = 'Tables';
+      var prev = table.closest('.NLM_sec, .NLM_sec_level_1');
+      if (prev) {
+        var h = prev.querySelector('h2, h3');
+        if (h) heading = h.textContent.trim();
+      }
+
+      sections.push({ heading: heading, content: [{ type: 'paragraph', text: tableText }] });
+    });
   }
 
   // References
