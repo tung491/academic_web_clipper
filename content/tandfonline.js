@@ -93,29 +93,34 @@ function extractSections() {
     flush();
   }
 
-  // Tables — separate pass to avoid querySelectorAll ordering issues with nested <p>
-  var tableBodyEl = document.querySelector('.hlFld-Fulltext') || document.querySelector('.article__body');
-  if (tableBodyEl) {
-    tableBodyEl.querySelectorAll('table').forEach(function(table) {
-      var tableText = extractTableAsText(table);
-      if (!tableText) return;
+  // Tables — search everywhere: .hlFld-Fulltext, .tableView, and document body
+  var allTables = document.querySelectorAll('.hlFld-Fulltext table, .tableView table, .NLM_table-wrap table');
+  var seenTables = new Set();
+  allTables.forEach(function(table) {
+    // Deduplicate (same table might match multiple selectors)
+    if (seenTables.has(table)) return;
+    seenTables.add(table);
 
-      var captionEl = table.querySelector('caption') ||
-        table.closest('.NLM_table-wrap, .tableWrapper')?.querySelector('.NLM_caption, .table-caption');
-      var caption = captionEl?.textContent?.trim() || '';
-      if (caption) tableText = caption + '\n' + tableText;
+    // Skip tiny layout tables
+    if (table.querySelectorAll('tr').length < 2) return;
 
-      // Find nearest preceding heading for context
-      var heading = 'Tables';
-      var prev = table.closest('.NLM_sec, .NLM_sec_level_1');
-      if (prev) {
-        var h = prev.querySelector('h2, h3');
-        if (h) heading = h.textContent.trim();
-      }
+    var tableText = extractTableAsText(table);
+    if (!tableText) return;
 
-      sections.push({ heading: heading, content: [{ type: 'paragraph', text: tableText }] });
-    });
-  }
+    var captionEl = table.querySelector('caption') ||
+      table.closest('.tableView, .NLM_table-wrap, .tableWrapper')?.querySelector('.NLM_caption, .table-caption, .captionLabel');
+    var caption = captionEl?.textContent?.trim() || '';
+    if (caption) tableText = caption + '\n' + tableText;
+
+    var heading = 'Tables';
+    var sec = table.closest('.NLM_sec, .NLM_sec_level_1');
+    if (sec) {
+      var h = sec.querySelector('h2, h3');
+      if (h) heading = h.textContent.trim();
+    }
+
+    sections.push({ heading: heading, content: [{ type: 'paragraph', text: tableText }] });
+  });
 
   // References
   var refEls = document.querySelectorAll('.references li, .citedByEntry, #references-section li');
