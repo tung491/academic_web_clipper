@@ -16,6 +16,7 @@
     "*://media.springernature.com/*",
     "*://dl.acm.org/*",
     "*://*.sciencedirect.com/*",
+    "*://ars.els-cdn.com/*",
     "*://*.mdpi.com/*",
     "*://hal.science/*"
   ],
