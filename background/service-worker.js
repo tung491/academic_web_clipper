@@ -2,6 +2,16 @@
 import { toMarkdown } from '../lib/markdown.js';
 import { createZip } from '../lib/zip.js';
 
+const PUBLISHERS = [
+  { name: 'IEEE Xplore',    pattern: /ieeexplore\.ieee\.org/,    script: 'content/ieee.js' },
+  { name: 'arXiv',          pattern: /arxiv\.org\/html\//,        script: 'content/arxiv.js' },
+  { name: 'Springer',       pattern: /link\.springer\.com/,       script: 'content/springer.js' },
+  { name: 'ACM DL',         pattern: /dl\.acm\.org/,              script: 'content/acm.js' },
+  { name: 'ScienceDirect',  pattern: /sciencedirect\.com/,        script: 'content/sciencedirect.js' },
+  { name: 'MDPI',           pattern: /mdpi\.com/,                 script: 'content/mdpi.js' },
+  { name: 'HAL Science',    pattern: /hal\.science/,              script: 'content/hal.js' },
+];
+
 // Listen for clip requests from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'clip') {
@@ -14,12 +24,13 @@ async function handleClip(savePath) {
     sendProgress('extracting');
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !tab.url.includes('ieeexplore.ieee.org')) {
-      sendProgress('error', 'Not on an IEEE Xplore page');
+    const publisher = PUBLISHERS.find(p => p.pattern.test(tab?.url || ''));
+    if (!publisher) {
+      sendProgress('error', 'Not on a supported publisher page');
       return;
     }
 
-    const extractionData = await injectAndWaitForResult(tab.id);
+    const extractionData = await injectAndWaitForResult(tab.id, publisher.script);
 
     if (extractionData.error) {
       sendProgress('error', extractionData.error);
@@ -94,7 +105,7 @@ async function handleClip(savePath) {
   }
 }
 
-function injectAndWaitForResult(tabId) {
+function injectAndWaitForResult(tabId, scriptPath) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       chrome.runtime.onMessage.removeListener(listener);
@@ -113,7 +124,7 @@ function injectAndWaitForResult(tabId) {
 
     chrome.scripting.executeScript({
       target: { tabId },
-      files: ['content/ieee.js']
+      files: ['content/shared.js', scriptPath]
     }).catch(err => {
       clearTimeout(timeout);
       chrome.runtime.onMessage.removeListener(listener);
