@@ -57,9 +57,9 @@ function extractSections() {
     });
   }
 
-  // Body sections — IEEE uses .section_2 for full-text sections
+  // Body sections — IEEE uses div.section for main sections (h2) and .section_2 for subsections (h3)
   const sectionEls = document.querySelectorAll(
-    '.section--body, .article-text .section, .section_2, .document-ft-section-container .section'
+    'div.section, div.section_2, .section--body, .document-ft-section-container .section'
   );
   sectionEls.forEach(sectionEl => {
     const headingEl = sectionEl.querySelector('h2, h3, .section-title, .header-title');
