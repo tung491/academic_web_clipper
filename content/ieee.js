@@ -138,20 +138,7 @@ async function extractFigures() {
     const index = figures.length + 1;
     const filename = `fig${index}.png`;
 
-    // Fetch image and convert to PNG via canvas
-    let dataUrl = null;
-    for (const url of [fullSizeUrl, src]) {
-      try {
-        dataUrl = await fetchAndConvertToPng(url);
-        if (dataUrl) break;
-      } catch (err) {
-        // Try next URL
-      }
-    }
-
-    if (dataUrl) {
-      figures.push({ id: figId, url: fullSizeUrl, filename, caption, dataUrl });
-    }
+    figures.push({ id: figId, url: fullSizeUrl, filename, caption });
   }
 
   // Scroll back to top

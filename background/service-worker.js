@@ -41,19 +41,19 @@ async function handleClip(savePath) {
 
     sendProgress('downloading');
 
-    // Process figures: decode base64 data URLs to Uint8Arrays
+    // Fetch images in the service worker (host_permissions bypass CORS)
     const zipFiles = [];
     let imageCount = 0;
     const failedFigures = [];
 
     for (const fig of figures) {
-      if (fig.dataUrl) {
+      if (fig.url) {
         try {
-          const binary = dataUrlToUint8Array(fig.dataUrl);
+          const binary = await fetchImageAsUint8Array(fig.url);
           zipFiles.push({ name: `images/${fig.filename}`, data: binary });
           imageCount++;
         } catch (err) {
-          console.warn(`Failed to decode ${fig.filename}:`, err);
+          console.warn(`Failed to fetch ${fig.filename}:`, err);
           failedFigures.push(fig.id);
         }
       } else {
@@ -154,14 +154,11 @@ function downloadFile(url, filename) {
   });
 }
 
-function dataUrlToUint8Array(dataUrl) {
-  const base64 = dataUrl.split(',')[1];
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
+async function fetchImageAsUint8Array(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const buffer = await response.arrayBuffer();
+  return new Uint8Array(buffer);
 }
 
 function uint8ArrayToBase64(bytes) {

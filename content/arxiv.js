@@ -137,16 +137,7 @@ async function extractFigures() {
     const index = figures.length + 1;
     const filename = `fig${index}.png`;
 
-    let dataUrl = null;
-    try {
-      dataUrl = await fetchAndConvertToPng(absoluteUrl);
-    } catch (err) {
-      // Unable to fetch/convert this figure — skip it
-    }
-
-    if (dataUrl) {
-      figures.push({ id: absoluteUrl, url: absoluteUrl, filename, caption, dataUrl });
-    }
+    figures.push({ id: absoluteUrl, url: absoluteUrl, filename, caption });
   }
 
   window.scrollTo(0, 0);
