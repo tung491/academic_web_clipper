@@ -2,7 +2,7 @@
 
 ## Overview
 
-Refactor the Academic Web Clipper Chrome extension to support 6 academic publishers via a URL-based router and per-publisher content scripts. Each publisher gets its own extraction script sharing a common interface and helper module.
+Refactor the Academic Web Clipper Chrome extension to support 7 academic publishers via a URL-based router and per-publisher content scripts. Each publisher gets its own extraction script sharing a common interface and helper module.
 
 ## Supported Publishers
 
@@ -14,6 +14,7 @@ Refactor the Academic Web Clipper Chrome extension to support 6 academic publish
 | ACM Digital Library | `dl.acm.org` | `content/acm.js` |
 | ScienceDirect | `sciencedirect.com` | `content/sciencedirect.js` |
 | MDPI | `mdpi.com` | `content/mdpi.js` |
+| HAL Science | `hal.science` | `content/hal.js` |
 
 ## Architecture
 
@@ -29,6 +30,7 @@ const PUBLISHERS = [
   { name: 'ACM DL',         pattern: /dl\.acm\.org/,              script: 'content/acm.js' },
   { name: 'ScienceDirect',  pattern: /sciencedirect\.com/,        script: 'content/sciencedirect.js' },
   { name: 'MDPI',           pattern: /mdpi\.com/,                 script: 'content/mdpi.js' },
+  { name: 'HAL Science',   pattern: /hal\.science/,              script: 'content/hal.js' },
 ];
 ```
 
@@ -128,6 +130,12 @@ Already implemented. Refactored to use `shared.js` helpers.
 - Sections: `.html-body` content, paragraphs in `.html-p`, grouped by `h2`/`h4` headings with class `.html-h2`, `.html-h4`.
 - Figures: `.html-fig img`, captions in `.html-fig_description`.
 
+### HAL Science (`hal.science`)
+
+- Metadata: `h1.title` or `.paper-title`, `.authors-list a` for authors, DOI from meta tags or `.paper-doi`, date from `.submission-date` or meta tags. Venue from `.journal-title` or `.conference-title`.
+- Sections: `.paper-content` area, sections grouped by `h2`/`h3` headings.
+- Figures: `figure img` with `figcaption`. Standard HTML5 figure elements. Images served from `hal.science` or external URLs.
+
 ## Changes to Existing Files
 
 ### `manifest.json`
@@ -141,7 +149,8 @@ Expand host permissions:
   "*://link.springer.com/*",
   "*://dl.acm.org/*",
   "*://www.sciencedirect.com/*",
-  "*://www.mdpi.com/*"
+  "*://www.mdpi.com/*",
+  "*://hal.science/*"
 ]
 ```
 
@@ -165,6 +174,7 @@ const SUPPORTED_PATTERNS = [
   /dl\.acm\.org/,
   /sciencedirect\.com/,
   /mdpi\.com/,
+  /hal\.science/,
 ];
 const isSupported = SUPPORTED_PATTERNS.some(p => p.test(tab.url));
 ```
@@ -186,7 +196,8 @@ content/
 ├── springer.js         # Springer Link
 ├── acm.js              # ACM Digital Library
 ├── sciencedirect.js    # ScienceDirect
-└── mdpi.js             # MDPI
+├── mdpi.js             # MDPI
+└── hal.js              # HAL Science
 ```
 
 Modified:
@@ -217,6 +228,7 @@ Unchanged:
 | ACM | `https://dl.acm.org/doi/10.1145/3544548.3581388` |
 | ScienceDirect | `https://www.sciencedirect.com/science/article/pii/S0925231223000012` |
 | MDPI | `https://www.mdpi.com/2076-3417/13/1/1` |
+| HAL | `https://hal.science/hal-03000000` |
 
 ## Future Enhancements (Out of Scope)
 
