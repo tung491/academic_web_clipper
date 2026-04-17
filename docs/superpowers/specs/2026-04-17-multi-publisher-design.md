@@ -32,7 +32,11 @@ const PUBLISHERS = [
 ];
 ```
 
-On a clip request, the service worker matches `tab.url` against these patterns and injects the corresponding content script. If no pattern matches, it sends an error to the popup.
+On a clip request, the service worker matches `tab.url` against these patterns and injects the corresponding content script. If no pattern matches, it sends an error to the popup: "Unsupported page. Navigate to a paper on a supported publisher site."
+
+For arXiv specifically: if the URL matches `arxiv.org/abs/` (abstract page) but not `arxiv.org/html/` (full text), the popup shows: "Open the HTML version of this arXiv paper to clip it." This is handled in the popup's detection logic, not the service worker.
+
+The `PUBLISHERS` registry is the single source of truth for URL patterns. The popup imports or duplicates the pattern list — see the Popup section for sync details.
 
 ### Data Flow
 
@@ -79,8 +83,10 @@ Injected before the publisher script via `chrome.scripting.executeScript({ files
 Contains:
 
 - `sendExtractionResult(data)` — wraps `chrome.runtime.sendMessage({ type: 'extractionResult', data })`
-- `sendExtractionError(message)` — wraps `chrome.runtime.sendMessage({ type: 'extractionResult', error: message })`
-- `fetchAndConvertToPng(url)` — creates an Image, draws onto canvas, returns `canvas.toDataURL('image/png')`
+- `sendExtractionError(message)` — wraps `chrome.runtime.sendMessage({ type: 'extractionResult', error: message })`. The service worker distinguishes success from error by checking `extractionData.error`: if truthy, it sends `sendProgress('error', extractionData.error)` to the popup; otherwise it proceeds with `extractionData.metadata`/`sections`/`figures`. This is the existing V1 pattern, unchanged.
+- `fetchAndConvertToPng(url)` — creates an Image, draws onto canvas, returns `canvas.toDataURL('image/png')`. For cross-origin images where CORS headers are not set (tainted canvas), falls back to fetching via `fetch()` with `credentials: 'include'` and returning the raw data URL via `FileReader.readAsDataURL()`. This fallback preserves the original format but avoids the canvas security error.
+
+Note: `content/shared.js` is injected via `chrome.scripting.executeScript` and does NOT need to be listed in `web_accessible_resources`. Only resources accessed from web page context (not extension context) require that declaration.
 
 ## Publisher Extraction Details
 
@@ -148,9 +154,10 @@ Expand host permissions:
 
 ### `popup/popup.js`
 
-- Replace hardcoded IEEE URL check with publisher-agnostic pattern matching:
+- Replace hardcoded IEEE URL check with publisher-agnostic pattern matching. To keep the popup and service worker in sync, define the pattern list in a shared module `content/publishers.js` that both can reference. However, since the popup cannot import ES modules and the service worker uses `"type": "module"`, the pragmatic approach is to maintain a parallel list in `popup.js` with a code comment referencing the service worker's `PUBLISHERS` array as the authoritative source.
 
 ```javascript
+// Keep in sync with PUBLISHERS in background/service-worker.js
 const SUPPORTED_PATTERNS = [
   /ieeexplore\.ieee\.org/,
   /arxiv\.org\/html\//,
@@ -161,6 +168,8 @@ const SUPPORTED_PATTERNS = [
 ];
 const isSupported = SUPPORTED_PATTERNS.some(p => p.test(tab.url));
 ```
+
+- Detect arXiv abstract pages (`arxiv.org/abs/`) separately and show a specific message: "Open the HTML version of this arXiv paper to clip it."
 
 ### `content/ieee.js`
 
