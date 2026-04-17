@@ -3,6 +3,9 @@
 
 (async function extractPaper() {
   try {
+    // Click all "Display Table" buttons and wait for tables to load
+    await expandAllTables();
+
     var metadata = extractMetadata();
     var sections = extractSections();
     var figures = await extractFigures();
@@ -11,6 +14,38 @@
     sendExtractionError(err.message);
   }
 })();
+
+async function expandAllTables() {
+  var buttons = document.querySelectorAll('.tableView a, .show-table, a[href*="showTable"], .tableDownloadOption a');
+  var displayLinks = [];
+
+  // Find links/buttons that say "Display Table"
+  document.querySelectorAll('.tableView a, .tableView button').forEach(function(el) {
+    if (/display\s*table/i.test(el.textContent)) {
+      displayLinks.push(el);
+    }
+  });
+
+  if (displayLinks.length === 0) return;
+
+  // Click each "Display Table" link
+  displayLinks.forEach(function(link) {
+    link.click();
+  });
+
+  // Wait for tables to load into the DOM
+  await new Promise(function(resolve) {
+    var attempts = 0;
+    var interval = setInterval(function() {
+      attempts++;
+      var tables = document.querySelectorAll('table');
+      if (tables.length >= displayLinks.length || attempts > 20) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 500);
+  });
+}
 
 function extractMetadata() {
   var title =
