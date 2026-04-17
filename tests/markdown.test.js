@@ -21,6 +21,7 @@ describe('toMarkdown', () => {
     assert.ok(md.startsWith('---\n'));
     assert.ok(md.includes('title: "Test Paper Title"'));
     assert.ok(md.includes('authors: [Alice Smith, Bob Jones]'));
+    assert.ok(md.includes('inline_author: "Smith et al."'));
     assert.ok(md.includes('doi: "10.1109/TEST.2021.001"'));
     assert.ok(md.includes('date: 2021-04-08'));
     assert.ok(md.includes('venue: "IEEE Transactions on Testing, vol. 1, no. 1"'));
@@ -100,6 +101,20 @@ describe('toMarkdown', () => {
     assert.ok(!md.includes('![['));
   });
 
+  it('formats inline_author as last name for solo author', () => {
+    const data = {
+      metadata: {
+        ...sampleData.metadata,
+        authors: ['John Doe']
+      },
+      sections: [],
+      figures: []
+    };
+    const md = toMarkdown(data);
+    assert.ok(md.includes('inline_author: "Doe"'));
+    assert.ok(!md.includes('et al.'));
+  });
+
   it('handles missing/null metadata fields gracefully', () => {
     const data = {
       metadata: {
@@ -116,6 +131,7 @@ describe('toMarkdown', () => {
     const md = toMarkdown(data);
     assert.ok(md.includes('title: "Partial Paper"'));
     assert.ok(!md.includes('authors:'));
+    assert.ok(!md.includes('inline_author:'));
     assert.ok(!md.includes('doi:'));
     assert.ok(!md.includes('venue:'));
     assert.ok(!md.includes('keywords:'));
