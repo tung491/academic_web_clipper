@@ -57,10 +57,11 @@ function extractSections() {
     });
   }
 
-  document.querySelectorAll('.NLM_sec_level_1, .NLM_sec').forEach(function(sectionEl) {
+  // Use only top-level sections; querySelectorAll within each captures nested content
+  var sectionSelector = document.querySelectorAll('.NLM_sec_level_1').length > 0
+    ? '.NLM_sec_level_1' : '.NLM_sec';
+  document.querySelectorAll(sectionSelector).forEach(function(sectionEl) {
     if (sectionEl.closest('.abstractSection') || sectionEl.classList.contains('abstractSection')) return;
-    // Skip nested .NLM_sec inside .NLM_sec_level_1 (avoid double-counting)
-    if (sectionEl.classList.contains('NLM_sec') && sectionEl.parentElement.closest('.NLM_sec_level_1')) return;
 
     var headingEl = sectionEl.querySelector('h2, h3, .sectionTitle, .NLM_title');
     var heading = headingEl?.textContent?.trim() || 'Untitled Section';
