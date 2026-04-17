@@ -19,7 +19,7 @@ chrome.storage.sync.get(['defaultSavePath'], (result) => {
 chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
   if (tab && tab.url && tab.url.includes('ieeexplore.ieee.org/abstract/document')) {
     ieeeView.style.display = 'block';
-    paperTitle.textContent = tab.title.replace(' | IEEE Xplore', '').trim() || 'IEEE Paper';
+    paperTitle.textContent = tab.title.replace(/\s*\|.*$/, '').trim() || 'IEEE Paper';
   } else {
     nonIeeeView.style.display = 'block';
   }

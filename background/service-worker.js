@@ -70,11 +70,9 @@ async function handleClip(savePath) {
     // Convert to markdown
     const markdown = toMarkdown({ metadata, sections, figures: figuresWithStatus });
 
-    // Save markdown file
-    const mdBlob = new Blob([markdown], { type: 'text/markdown' });
-    const mdUrl = URL.createObjectURL(mdBlob);
-    await downloadFile(mdUrl, `${basePath}/${safeName}.md`);
-    URL.revokeObjectURL(mdUrl);
+    // Save markdown file as data URL (Blob/createObjectURL not available in MV3 service workers)
+    const mdDataUrl = 'data:text/markdown;base64,' + btoa(unescape(encodeURIComponent(markdown)));
+    await downloadFile(mdDataUrl, `${basePath}/${safeName}.md`);
 
     // Notify popup: done
     sendProgress('done', `Clipped "${metadata.title}" with ${imageCount} images`);
