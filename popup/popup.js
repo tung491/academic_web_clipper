@@ -19,6 +19,7 @@ const SUPPORTED_PATTERNS = [
   /sciencedirect\.com/,
   /mdpi\.com/,
   /hal\.science/,
+  /onlinelibrary\.wiley\.com/,
 ];
 
 const ARXIV_ABSTRACT = /arxiv\.org\/abs\//;

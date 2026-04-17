@@ -19,7 +19,9 @@
     "*://ars.els-cdn.com/*",
     "*://*.mdpi.com/*",
     "*://pub.mdpi-res.com/*",
-    "*://hal.science/*"
+    "*://hal.science/*",
+    "*://onlinelibrary.wiley.com/*",
+    "*://*.wiley.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",

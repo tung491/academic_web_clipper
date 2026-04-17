@@ -10,6 +10,7 @@ const PUBLISHERS = [
   { name: 'ScienceDirect',  pattern: /sciencedirect\.com/,        script: 'content/sciencedirect.js' },
   { name: 'MDPI',           pattern: /mdpi\.com/,                 script: 'content/mdpi.js' },
   { name: 'HAL Science',    pattern: /hal\.science/,              script: 'content/hal.js' },
+  { name: 'Wiley',          pattern: /onlinelibrary\.wiley\.com/, script: 'content/wiley.js' },
 ];
 
 // Listen for clip requests from popup
