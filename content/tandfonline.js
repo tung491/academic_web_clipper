@@ -3,15 +3,11 @@
 
 (async function extractPaper() {
   try {
+    // First, extract tables from popups (T&F loads them dynamically)
+    var tableMap = await extractPopupTables();
+
     var metadata = extractMetadata();
-    var sections = extractSections();
-
-    // Extract tables from popups (T&F loads tables dynamically via "Display Table" links)
-    var popupTables = await extractPopupTables();
-    popupTables.forEach(function(t) {
-      sections.push(t);
-    });
-
+    var sections = extractSections(tableMap);
     var figures = await extractFigures();
     sendExtractionResult({ metadata: metadata, sections: sections, figures: figures });
   } catch (err) {
@@ -20,13 +16,23 @@
 })();
 
 async function extractPopupTables() {
-  var results = [];
+  var tableMap = {};
 
-  // Find all "Display Table" links
+  // Also capture any tables already in the DOM
+  document.querySelectorAll('table').forEach(function(t) {
+    if (t.querySelectorAll('tr').length < 2) return;
+    var sec = t.closest('.NLM_sec, .NLM_sec_level_1');
+    var captionEl = sec ? sec.querySelector('.tableCaption, .NLM_caption, caption') : null;
+    var caption = captionEl ? captionEl.textContent.trim() : '';
+    var match = caption.match(/table\s*(\d+)/i);
+    var key = match ? match[1] : 'static_' + Object.keys(tableMap).length;
+    tableMap[key] = { caption: caption, text: extractTableAsText(t) };
+  });
+
+  // Find all "Display Table" links and click them to load hidden tables
   var displayLinks = [];
   document.querySelectorAll('.tableView a, .tableView button').forEach(function(el) {
     if (/display\s*table/i.test(el.textContent)) {
-      // Get caption from the same .tableView container
       var view = el.closest('.tableView');
       var captionEl = view ? view.querySelector('.tableCaption, .NLM_caption') : null;
       var caption = captionEl ? captionEl.textContent.trim() : '';
@@ -36,24 +42,24 @@ async function extractPopupTables() {
 
   for (var i = 0; i < displayLinks.length; i++) {
     var link = displayLinks[i];
+    var match = link.caption.match(/table\s*(\d+)/i);
+    var key = match ? match[1] : 'popup_' + i;
 
-    // Count tables before clicking
+    // Skip if already captured from static DOM
+    if (tableMap[key]) continue;
+
     var tablesBefore = document.querySelectorAll('table').length;
 
-    // Simulate real mouse click (T&F handlers may ignore synthetic .click())
     link.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
 
-    // Wait for a new table or popup to appear
     var newTable = await waitForNewTable(tablesBefore);
     if (newTable) {
       var tableText = extractTableAsText(newTable);
       if (tableText) {
-        if (link.caption) tableText = link.caption + '\n' + tableText;
-        results.push({ heading: 'Tables', content: [{ type: 'paragraph', text: tableText }] });
+        tableMap[key] = { caption: link.caption, text: tableText };
       }
     }
 
-    // Close the popup
     var closeBtn = document.querySelector('button.modal-close') || document.querySelector('button.ref-close');
     if (closeBtn) {
       closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -63,7 +69,7 @@ async function extractPopupTables() {
     await new Promise(function(r) { setTimeout(r, 800); });
   }
 
-  return results;
+  return tableMap;
 }
 
 function waitForNewTable(countBefore) {
@@ -74,7 +80,6 @@ function waitForNewTable(countBefore) {
       var allTables = document.querySelectorAll('table');
       if (allTables.length > countBefore) {
         clearInterval(interval);
-        // Return the newest table (last one)
         resolve(allTables[allTables.length - 1]);
       } else if (attempts > 20) {
         clearInterval(interval);
@@ -116,7 +121,7 @@ function extractMetadata() {
   return { title: title, authors: authors, doi: doi, date: date, venue: venue, keywords: keywords, abstract: abstract };
 }
 
-function extractSections() {
+function extractSections(tableMap) {
   var sections = [];
 
   var abstractEl =
@@ -129,7 +134,7 @@ function extractSections() {
     });
   }
 
-  // Walk the full-text body in document order — more robust than matching nested sections
+  // Walk the body in document order, inserting tables at .tableView positions
   var bodyEl = document.querySelector('.hlFld-Fulltext') || document.querySelector('.article__body');
   if (bodyEl) {
     var currentHeading = 'Introduction';
@@ -142,14 +147,15 @@ function extractSections() {
       currentContent = [];
     };
 
-    // Include table in the walk
-    bodyEl.querySelectorAll('h2, h3, p, .NLM_p, table, img[src*="cms/asset"]').forEach(function(el) {
+    bodyEl.querySelectorAll('h2, h3, p, .NLM_p, table, .tableView, img[src*="cms/asset"]').forEach(function(el) {
       if (el.closest('.abstractSection')) return;
 
       var tag = el.tagName;
 
-      // Skip <p> inside tables to avoid double-counting
+      // Skip <p> inside tables
       if ((tag === 'P' || el.classList.contains('NLM_p')) && el.closest('table')) return;
+      // Skip <p> inside .tableView (caption text)
+      if ((tag === 'P' || el.classList.contains('NLM_p')) && el.closest('.tableView')) return;
 
       if (tag === 'H2' || tag === 'H3') {
         flush();
@@ -160,6 +166,21 @@ function extractSections() {
           if (tableText) {
             currentContent.push({ type: 'paragraph', text: tableText });
           }
+        }
+      } else if (el.classList.contains('tableView')) {
+        // Insert the popup-extracted table at this position
+        var captionEl = el.querySelector('.tableCaption, .NLM_caption');
+        var caption = captionEl ? captionEl.textContent.trim() : '';
+        var match = caption.match(/table\s*(\d+)/i);
+        var key = match ? match[1] : null;
+
+        if (key && tableMap[key]) {
+          var entry = tableMap[key];
+          var fullText = entry.caption ? entry.caption + '\n' + entry.text : entry.text;
+          currentContent.push({ type: 'paragraph', text: fullText });
+        } else if (caption) {
+          // Table not loaded — at least note it exists
+          currentContent.push({ type: 'paragraph', text: caption + '\n(Table content not available)' });
         }
       } else if (tag === 'P' || el.classList.contains('NLM_p')) {
         var text = el.textContent.trim();
@@ -173,16 +194,6 @@ function extractSections() {
 
     flush();
   }
-
-  // Also check .tableView containers (tables rendered outside main flow)
-  document.querySelectorAll('.tableView table').forEach(function(table) {
-    if (table.closest('.hlFld-Fulltext')) return;
-    if (table.querySelectorAll('tr').length < 2) return;
-    var tableText = extractTableAsText(table);
-    if (tableText) {
-      sections.push({ heading: 'Tables', content: [{ type: 'paragraph', text: tableText }] });
-    }
-  });
 
   // References
   var refEls = document.querySelectorAll('.references li, .citedByEntry, #references-section li');
@@ -200,7 +211,6 @@ async function extractFigures() {
   var figures = [];
   var seen = new Set();
 
-  // T&F has no <figure> tags — images are in .figureView or directly as img with cms/asset URLs
   var imgEls = document.querySelectorAll('.figureView img, img[src*="cms/asset"]');
 
   for (var img of imgEls) {
@@ -212,7 +222,6 @@ async function extractFigures() {
     img.scrollIntoView({ behavior: 'instant', block: 'center' });
     await new Promise(function(r) { setTimeout(r, 300); });
 
-    // Caption from nearby elements
     var container = img.closest('.figureView') || img.closest('div');
     var captionEl = container?.querySelector('.caption, figcaption, .NLM_caption');
     if (!captionEl) {
