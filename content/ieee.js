@@ -7,15 +7,9 @@
     const sections = extractSections();
     const figures = await extractFigures();
 
-    chrome.runtime.sendMessage({
-      type: 'extractionResult',
-      data: { metadata, sections, figures }
-    });
+    sendExtractionResult({ metadata, sections, figures });
   } catch (err) {
-    chrome.runtime.sendMessage({
-      type: 'extractionResult',
-      error: err.message
-    });
+    sendExtractionError(err.message);
   }
 })();
 
@@ -165,19 +159,3 @@ async function extractFigures() {
   return figures;
 }
 
-function fetchAndConvertToPng(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'use-credentials';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = () => reject(new Error(`Failed to load: ${url}`));
-    img.src = url;
-  });
-}
