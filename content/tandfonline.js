@@ -70,16 +70,25 @@ function extractSections() {
       currentContent = [];
     };
 
-    bodyEl.querySelectorAll('h2, h3, p, .NLM_p, img[src*="cms/asset"]').forEach(function(el) {
+    // Include table in the walk
+    bodyEl.querySelectorAll('h2, h3, p, .NLM_p, table, img[src*="cms/asset"]').forEach(function(el) {
       if (el.closest('.abstractSection')) return;
-      // Skip paragraphs inside tables — tables are handled separately
-      if (el.closest('table')) return;
 
       var tag = el.tagName;
+
+      // Skip <p> inside tables to avoid double-counting
+      if ((tag === 'P' || el.classList.contains('NLM_p')) && el.closest('table')) return;
 
       if (tag === 'H2' || tag === 'H3') {
         flush();
         currentHeading = el.textContent.trim() || 'Untitled Section';
+      } else if (tag === 'TABLE') {
+        if (el.querySelectorAll('tr').length >= 2) {
+          var tableText = extractTableAsText(el);
+          if (tableText) {
+            currentContent.push({ type: 'paragraph', text: tableText });
+          }
+        }
       } else if (tag === 'P' || el.classList.contains('NLM_p')) {
         var text = el.textContent.trim();
         if (text && text.length > 10) {
@@ -93,33 +102,14 @@ function extractSections() {
     flush();
   }
 
-  // Tables — search everywhere: .hlFld-Fulltext, .tableView, and document body
-  var allTables = document.querySelectorAll('.hlFld-Fulltext table, .tableView table, .NLM_table-wrap table');
-  var seenTables = new Set();
-  allTables.forEach(function(table) {
-    // Deduplicate (same table might match multiple selectors)
-    if (seenTables.has(table)) return;
-    seenTables.add(table);
-
-    // Skip tiny layout tables
+  // Also check .tableView containers (tables rendered outside main flow)
+  document.querySelectorAll('.tableView table').forEach(function(table) {
+    if (table.closest('.hlFld-Fulltext')) return;
     if (table.querySelectorAll('tr').length < 2) return;
-
     var tableText = extractTableAsText(table);
-    if (!tableText) return;
-
-    var captionEl = table.querySelector('caption') ||
-      table.closest('.tableView, .NLM_table-wrap, .tableWrapper')?.querySelector('.NLM_caption, .table-caption, .captionLabel');
-    var caption = captionEl?.textContent?.trim() || '';
-    if (caption) tableText = caption + '\n' + tableText;
-
-    var heading = 'Tables';
-    var sec = table.closest('.NLM_sec, .NLM_sec_level_1');
-    if (sec) {
-      var h = sec.querySelector('h2, h3');
-      if (h) heading = h.textContent.trim();
+    if (tableText) {
+      sections.push({ heading: 'Tables', content: [{ type: 'paragraph', text: tableText }] });
     }
-
-    sections.push({ heading: heading, content: [{ type: 'paragraph', text: tableText }] });
   });
 
   // References
