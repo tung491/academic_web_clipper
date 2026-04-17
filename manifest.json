@@ -18,6 +18,7 @@
     "*://*.sciencedirect.com/*",
     "*://ars.els-cdn.com/*",
     "*://*.mdpi.com/*",
+    "*://pub.mdpi-res.com/*",
     "*://hal.science/*"
   ],
   "action": {
