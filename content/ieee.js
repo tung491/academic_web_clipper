@@ -4,13 +4,12 @@
 (async function extractPaper() {
   try {
     const metadata = extractMetadata();
-    const paywalled = detectPaywall();
     const sections = extractSections();
-    const figures = paywalled ? [] : await extractFigures();
+    const figures = await extractFigures();
 
     chrome.runtime.sendMessage({
       type: 'extractionResult',
-      data: { metadata, sections, figures, paywalled }
+      data: { metadata, sections, figures }
     });
   } catch (err) {
     chrome.runtime.sendMessage({
@@ -52,12 +51,6 @@ function extractMetadata() {
   return { title, authors, doi, date, venue, keywords, abstract };
 }
 
-function detectPaywall() {
-  const accessBanner = document.querySelector('.access-banner, .login-banner, .document-banner-access');
-  const noFullText = !document.querySelector('.section--body, .article-text .section');
-  return !!(accessBanner || noFullText);
-}
-
 function extractSections() {
   const sections = [];
 
@@ -70,10 +63,12 @@ function extractSections() {
     });
   }
 
-  // Body sections
-  const sectionEls = document.querySelectorAll('.section--body, .article-text .section');
+  // Body sections — IEEE uses .section_2 for full-text sections
+  const sectionEls = document.querySelectorAll(
+    '.section--body, .article-text .section, .section_2, .document-ft-section-container .section'
+  );
   sectionEls.forEach(sectionEl => {
-    const headingEl = sectionEl.querySelector('h2, h3, .section-title');
+    const headingEl = sectionEl.querySelector('h2, h3, .section-title, .header-title');
     const heading = headingEl?.textContent?.trim() || 'Untitled Section';
 
     const content = [];
@@ -85,14 +80,11 @@ function extractSections() {
       }
     });
 
-    // Inline figure references within this section
-    const figEls = sectionEl.querySelectorAll('figure, .figuregroup');
-    figEls.forEach(fig => {
-      const img = fig.querySelector('img');
-      if (img) {
-        const figId = img.getAttribute('data-media-id') || img.src || fig.id;
-        content.push({ type: 'figure', figureId: figId });
-      }
+    // Find figure images within this section
+    const imgs = sectionEl.querySelectorAll('img[src*="mediastore"]');
+    imgs.forEach(img => {
+      const figId = img.getAttribute('data-media-id') || img.src;
+      content.push({ type: 'figure', figureId: figId });
     });
 
     if (heading || content.length > 0) {
@@ -101,7 +93,7 @@ function extractSections() {
   });
 
   // References section
-  const refEls = document.querySelectorAll('.reference-container .reference-item, ol.references li');
+  const refEls = document.querySelectorAll('.reference-container .reference-item, ol.references li, .refs .reference');
   if (refEls.length > 0) {
     const refContent = [...refEls].map((ref, i) => ({
       type: 'paragraph',
@@ -115,43 +107,62 @@ function extractSections() {
 
 async function extractFigures() {
   const figures = [];
-  const figEls = document.querySelectorAll('figure img, .figuregroup img');
 
-  for (const img of figEls) {
-    // Scroll into view to trigger lazy loading
+  // IEEE Xplore uses plain <img> tags with mediastore URLs for figures
+  // Filter out logos, icons, and other non-figure images
+  const allImgs = document.querySelectorAll('img[src*="mediastore"]');
+
+  for (const img of allImgs) {
+    // Skip tiny icons and non-content images
+    const src = img.src;
+    if (!src || src.includes('icon') || src.includes('logo')) continue;
+
+    // Scroll into view to ensure it's loaded
     img.scrollIntoView({ behavior: 'instant', block: 'center' });
+    await new Promise(r => setTimeout(r, 300));
 
-    // Wait for src to populate (poll up to 3 seconds)
-    const src = await waitForSrc(img, 3000);
-    if (!src) continue;
+    // Try to get the full-size URL by replacing -small with -large
+    const fullSizeUrl = src
+      .replace('-small.', '-large.')
+      .replace('-small-', '-large-');
 
     const figId = img.getAttribute('data-media-id') || src;
-    const figureContainer = img.closest('figure') || img.closest('.figuregroup');
-    const captionEl = figureContainer?.querySelector('figcaption, .figcaption, .caption');
-    const caption = captionEl?.textContent?.trim() || '';
 
-    const index = figures.length + 1;
-    const filename = `fig${index}.png`;
-
-    const url = src.startsWith('http') ? src : new URL(src, window.location.origin).href;
-
-    // Fetch image data as base64 (content script has the page's session cookies)
-    let dataUrl = null;
-    try {
-      const response = await fetch(url, { credentials: 'include' });
-      const blob = await response.blob();
-      dataUrl = await blobToBase64(blob);
-    } catch (err) {
-      console.warn(`Failed to fetch image: ${url}`, err);
+    // Look for caption near the image
+    const parent = img.closest('div') || img.parentElement;
+    const captionEl = parent?.querySelector('.figcaption, figcaption, .caption, .fig-caption')
+      || parent?.nextElementSibling;
+    let caption = '';
+    if (captionEl) {
+      const text = captionEl.textContent?.trim() || '';
+      // Only use as caption if it looks like one (starts with "Fig" or "Figure" or is short)
+      if (text.match(/^fig/i) || text.length < 200) {
+        caption = text;
+      }
     }
 
-    figures.push({
-      id: figId,
-      url,
-      filename,
-      caption,
-      dataUrl
-    });
+    const index = figures.length + 1;
+    const ext = src.match(/\.(png|jpg|jpeg|gif|svg|webp)/i)?.[1] || 'png';
+    const filename = `fig${index}.${ext}`;
+
+    // Fetch image data — try full-size first, fall back to original
+    let dataUrl = null;
+    for (const url of [fullSizeUrl, src]) {
+      try {
+        const response = await fetch(url, { credentials: 'include' });
+        if (response.ok) {
+          const blob = await response.blob();
+          dataUrl = await blobToBase64(blob);
+          break;
+        }
+      } catch (err) {
+        // Try next URL
+      }
+    }
+
+    if (dataUrl) {
+      figures.push({ id: figId, url: fullSizeUrl, filename, caption, dataUrl });
+    }
   }
 
   // Scroll back to top
@@ -165,25 +176,5 @@ function blobToBase64(blob) {
     reader.onloadend = () => resolve(reader.result);
     reader.onerror = reject;
     reader.readAsDataURL(blob);
-  });
-}
-
-function waitForSrc(img, timeoutMs) {
-  return new Promise(resolve => {
-    if (img.src && !img.src.includes('blank') && img.naturalWidth > 0) {
-      return resolve(img.src);
-    }
-    const interval = 100;
-    let elapsed = 0;
-    const timer = setInterval(() => {
-      elapsed += interval;
-      if (img.src && !img.src.includes('blank') && img.naturalWidth > 0) {
-        clearInterval(timer);
-        resolve(img.src);
-      } else if (elapsed >= timeoutMs) {
-        clearInterval(timer);
-        resolve(img.src || null);
-      }
-    }, interval);
   });
 }

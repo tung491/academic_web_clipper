@@ -26,11 +26,7 @@ async function handleClip(savePath) {
       return;
     }
 
-    const { metadata, sections, figures, paywalled } = extractionData;
-
-    if (paywalled) {
-      sendProgress('downloading', 'Paywall detected — clipping abstract only');
-    }
+    const { metadata, sections, figures } = extractionData;
 
     sendProgress('downloading');
 
