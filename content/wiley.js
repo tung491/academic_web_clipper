@@ -24,9 +24,11 @@ function extractMetadata() {
       .map(function(el) { return el.content.trim(); }).filter(Boolean);
   }
 
+  // Abstract — try multiple selectors since Wiley varies by journal
   var abstractEl =
-    document.querySelector('.article-section--abstract .article-section__content p') ||
-    document.querySelector('#abstract .article-section__content p');
+    document.querySelector('#abstract .article-section__content p') ||
+    document.querySelector('[class*="abstract"] .article-section__content p') ||
+    document.querySelector('.article-section__content p');
   var abstract = abstractEl?.textContent?.trim() || '';
 
   var doi = document.querySelector('meta[name="citation_doi"]')?.content || '';
@@ -47,8 +49,9 @@ function extractSections() {
 
   // Abstract
   var abstractEl =
-    document.querySelector('.article-section--abstract .article-section__content p') ||
-    document.querySelector('#abstract .article-section__content p');
+    document.querySelector('#abstract .article-section__content p') ||
+    document.querySelector('[class*="abstract"] .article-section__content p') ||
+    document.querySelector('.article-section__content p');
   if (abstractEl) {
     sections.push({
       heading: 'Abstract',
@@ -56,14 +59,22 @@ function extractSections() {
     });
   }
 
-  // Body sections
+  // Body sections — iterate all .article-section__content
+  var seenAbstract = false;
   document.querySelectorAll('.article-section__content').forEach(function(sectionEl) {
-    // Skip abstract (already handled)
-    if (sectionEl.closest('.article-section--abstract') || sectionEl.closest('#abstract')) return;
+    // Skip the first one if it's the abstract we already captured
+    if (!seenAbstract) {
+      seenAbstract = true;
+      var isAbstract = sectionEl.closest('#abstract') || sectionEl.closest('[class*="abstract"]');
+      if (isAbstract || sectionEl === abstractEl?.closest('.article-section__content')) return;
+    }
 
     var parent = sectionEl.closest('section') || sectionEl.parentElement;
     var headingEl = parent?.querySelector('h2, h3, .article-section__title');
     var heading = headingEl?.textContent?.trim() || 'Untitled Section';
+
+    // Skip reference and supporting info sections
+    if (/references|bibliography|supporting info|acknowledgment/i.test(heading)) return;
 
     var content = [];
     sectionEl.querySelectorAll('p').forEach(function(p) {
@@ -71,19 +82,34 @@ function extractSections() {
       if (text && text.length > 10) content.push({ type: 'paragraph', text: text });
     });
 
+    // Figures within this section
     sectionEl.querySelectorAll('figure').forEach(function(fig) {
-      var img = fig.querySelector('img');
-      if (img) {
-        var src = img.getAttribute('data-src') || img.src;
-        if (src) content.push({ type: 'figure', figureId: new URL(src, location.href).href });
+      var img = fig.querySelector('img.figure__image, picture img, img');
+      if (img && img.src && img.src.includes('cms/asset')) {
+        content.push({ type: 'figure', figureId: img.src });
       }
     });
 
     if (content.length > 0) sections.push({ heading: heading, content: content });
   });
 
+  // Also capture inline figures that are in their own sections
+  document.querySelectorAll('section.article-section__inline-figure').forEach(function(sec) {
+    var fig = sec.querySelector('figure');
+    if (!fig) return;
+    var img = fig.querySelector('img.figure__image, picture img, img');
+    if (img && img.src && img.src.includes('cms/asset')) {
+      // Find which section this figure belongs to
+      var prevSection = sec.previousElementSibling;
+      while (prevSection && !prevSection.querySelector('.article-section__content')) {
+        prevSection = prevSection.previousElementSibling;
+      }
+      // Figure will be matched by ID in extractFigures
+    }
+  });
+
   // References
-  var refEls = document.querySelectorAll('.citation__body, .references__item, #references-section li');
+  var refEls = document.querySelectorAll('#references-section li, .citation__body');
   if (refEls.length > 0) {
     var refContent = [...refEls].map(function(ref, i) {
       return { type: 'paragraph', text: (i + 1) + '. ' + ref.textContent.trim() };
@@ -97,29 +123,27 @@ function extractSections() {
 async function extractFigures() {
   var figures = [];
   var seen = new Set();
-  var figEls = document.querySelectorAll('figure img, .figure__image img');
 
-  for (var img of figEls) {
-    var src = img.getAttribute('data-src') || img.src;
-    if (!src) continue;
+  // Wiley uses figure > picture > img or figure > img.figure__image
+  var figureEls = document.querySelectorAll('figure.figure');
 
-    var url = new URL(src, location.href).href;
-    if (seen.has(url)) continue;
-    seen.add(url);
+  for (var fig of figureEls) {
+    var img = fig.querySelector('img.figure__image') || fig.querySelector('picture img') || fig.querySelector('img');
+    if (!img) continue;
+
+    var src = img.src;
+    if (!src || !src.includes('cms/asset')) continue;
+    if (seen.has(src)) continue;
+    seen.add(src);
 
     img.scrollIntoView({ behavior: 'instant', block: 'center' });
     await new Promise(function(r) { setTimeout(r, 300); });
 
-    // Re-read after scroll (lazy loading)
-    var actualSrc = img.src || img.getAttribute('data-src');
-    var actualUrl = actualSrc ? new URL(actualSrc, location.href).href : url;
-
-    var container = img.closest('figure');
-    var captionEl = container?.querySelector('figcaption');
+    var captionEl = fig.querySelector('figcaption, .figure__caption');
     var caption = captionEl?.textContent?.trim() || '';
 
     var index = figures.length + 1;
-    figures.push({ id: url, url: actualUrl, filename: 'fig' + index + '.png', caption: caption });
+    figures.push({ id: src, url: src, filename: 'fig' + index + '.png', caption: caption });
   }
 
   window.scrollTo(0, 0);
