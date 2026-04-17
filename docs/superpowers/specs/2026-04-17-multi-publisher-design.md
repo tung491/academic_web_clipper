@@ -204,13 +204,14 @@ Modified:
 - `manifest.json`
 - `background/service-worker.js`
 - `popup/popup.js`
+- `popup/popup.html`
 - `content/ieee.js`
 
 Unchanged:
 - `lib/markdown.js`
 - `lib/zip.js`
 - `options/`
-- `popup/popup.html`, `popup/popup.css`
+- `popup/popup.css`
 
 ## Testing
 

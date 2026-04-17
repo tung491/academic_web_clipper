@@ -1053,7 +1053,8 @@ git commit -m "feat: add MDPI content extraction script"
 })();
 
 function extractMetadata() {
-  const title = document.querySelector('h1.title, .paper-title')?.textContent?.trim()
+  const title = document.querySelector('h1.title')?.textContent?.trim()
+    || document.querySelector('.paper-title')?.textContent?.trim()
     || document.querySelector('meta[name="citation_title"]')?.content || 'Untitled';
 
   const authorEls = document.querySelectorAll('.authors-list a, meta[name="citation_author"], .contrib-author');
