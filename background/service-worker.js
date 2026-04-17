@@ -1,31 +1,24 @@
 // background/service-worker.js
 import { toMarkdown } from '../lib/markdown.js';
+import { createZip } from '../lib/zip.js';
 
 // Listen for clip requests from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'clip') {
     handleClip(message.savePath);
   }
-  if (message.type === 'extractionResult') {
-    // Handled via pendingExtraction promise
-  }
 });
-
-let pendingExtraction = null;
 
 async function handleClip(savePath) {
   try {
-    // Notify popup: extracting
     sendProgress('extracting');
 
-    // Get active tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.url.includes('ieeexplore.ieee.org')) {
       sendProgress('error', 'Not on an IEEE Xplore page');
       return;
     }
 
-    // Set up listener for extraction result before injecting
     const extractionData = await injectAndWaitForResult(tab.id);
 
     if (extractionData.error) {
@@ -39,29 +32,29 @@ async function handleClip(savePath) {
       sendProgress('downloading', 'Paywall detected — clipping abstract only');
     }
 
-    // Build folder name with timestamp
-    const timestamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13);
-    const safeName = sanitizeFilename(metadata.title);
-    const folderName = `${safeName}_${timestamp}`;
-    const basePath = savePath ? `${savePath}/${folderName}` : folderName;
-
-    // Notify popup: downloading
     sendProgress('downloading');
 
-    // Download images, tracking failures
+    // Process figures: decode base64 data URLs to Uint8Arrays
+    const zipFiles = [];
     let imageCount = 0;
     const failedFigures = [];
+
     for (const fig of figures) {
-      try {
-        await downloadFile(fig.url, `${basePath}/images/${fig.filename}`);
-        imageCount++;
-      } catch (err) {
-        console.warn(`Failed to download ${fig.filename}:`, err);
+      if (fig.dataUrl) {
+        try {
+          const binary = dataUrlToUint8Array(fig.dataUrl);
+          zipFiles.push({ name: `images/${fig.filename}`, data: binary });
+          imageCount++;
+        } catch (err) {
+          console.warn(`Failed to decode ${fig.filename}:`, err);
+          failedFigures.push(fig.id);
+        }
+      } else {
         failedFigures.push(fig.id);
       }
     }
 
-    // Mark failed figures so markdown converter can add placeholders
+    // Mark failed figures for markdown placeholders
     const figuresWithStatus = figures.map(f => ({
       ...f,
       failed: failedFigures.includes(f.id)
@@ -70,14 +63,29 @@ async function handleClip(savePath) {
     // Convert to markdown
     const markdown = toMarkdown({ metadata, sections, figures: figuresWithStatus });
 
-    // Save markdown file as data URL (Blob/createObjectURL not available in MV3 service workers)
-    const mdDataUrl = 'data:text/markdown;base64,' + btoa(unescape(encodeURIComponent(markdown)));
-    await downloadFile(mdDataUrl, `${basePath}/${safeName}.md`);
+    // Add markdown to zip
+    const safeName = sanitizeFilename(metadata.title);
+    zipFiles.unshift({
+      name: `${safeName}.md`,
+      data: new TextEncoder().encode(markdown)
+    });
 
-    // Notify popup: done
+    // Create zip
+    const zipBytes = createZip(zipFiles);
+
+    // Download zip as a single file
+    const base64 = uint8ArrayToBase64(zipBytes);
+    const zipDataUrl = `data:application/zip;base64,${base64}`;
+
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13);
+    const zipFilename = savePath
+      ? `${savePath}/${safeName}_${timestamp}.zip`
+      : `${safeName}_${timestamp}.zip`;
+
+    await downloadFile(zipDataUrl, zipFilename);
+
     sendProgress('done', `Clipped "${metadata.title}" with ${imageCount} images`);
 
-    // Badge
     chrome.action.setBadgeText({ text: '✓' });
     chrome.action.setBadgeBackgroundColor({ color: '#4CAF50' });
     setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
@@ -124,7 +132,6 @@ function downloadFile(url, filename) {
       if (chrome.runtime.lastError) {
         return reject(new Error(chrome.runtime.lastError.message));
       }
-      // Wait for download to actually complete or fail
       function onChange(delta) {
         if (delta.id !== downloadId) return;
         if (delta.state?.current === 'complete') {
@@ -140,10 +147,26 @@ function downloadFile(url, filename) {
   });
 }
 
+function dataUrlToUint8Array(dataUrl) {
+  const base64 = dataUrl.split(',')[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function uint8ArrayToBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 function sendProgress(stage, detail) {
-  chrome.runtime.sendMessage({ type: 'progress', stage, detail }).catch(() => {
-    // Popup may be closed, ignore
-  });
+  chrome.runtime.sendMessage({ type: 'progress', stage, detail }).catch(() => {});
 }
 
 function sanitizeFilename(name) {

@@ -133,17 +133,39 @@ async function extractFigures() {
     const index = figures.length + 1;
     const filename = `fig${index}.png`;
 
+    const url = src.startsWith('http') ? src : new URL(src, window.location.origin).href;
+
+    // Fetch image data as base64 (content script has the page's session cookies)
+    let dataUrl = null;
+    try {
+      const response = await fetch(url, { credentials: 'include' });
+      const blob = await response.blob();
+      dataUrl = await blobToBase64(blob);
+    } catch (err) {
+      console.warn(`Failed to fetch image: ${url}`, err);
+    }
+
     figures.push({
       id: figId,
-      url: src.startsWith('http') ? src : new URL(src, window.location.origin).href,
+      url,
       filename,
-      caption
+      caption,
+      dataUrl
     });
   }
 
   // Scroll back to top
   window.scrollTo(0, 0);
   return figures;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 function waitForSrc(img, timeoutMs) {
