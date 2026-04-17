@@ -11,6 +11,8 @@ const PUBLISHERS = [
   { name: 'MDPI',           pattern: /mdpi\.com/,                 script: 'content/mdpi.js' },
   { name: 'HAL Science',    pattern: /hal\.science/,              script: 'content/hal.js' },
   { name: 'Wiley',          pattern: /onlinelibrary\.wiley\.com/, script: 'content/wiley.js' },
+  { name: 'T&F Online',    pattern: /tandfonline\.com/,           script: 'content/tandfonline.js' },
+  { name: 'ASCE Library',  pattern: /ascelibrary\.org/,           script: 'content/asce.js' },
 ];
 
 // Listen for clip requests from popup

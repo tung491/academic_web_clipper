@@ -20,6 +20,8 @@ const SUPPORTED_PATTERNS = [
   /mdpi\.com/,
   /hal\.science/,
   /onlinelibrary\.wiley\.com/,
+  /tandfonline\.com/,
+  /ascelibrary\.org/,
 ];
 
 const ARXIV_ABSTRACT = /arxiv\.org\/abs\//;

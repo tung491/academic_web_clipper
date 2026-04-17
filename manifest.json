@@ -21,7 +21,9 @@
     "*://pub.mdpi-res.com/*",
     "*://hal.science/*",
     "*://onlinelibrary.wiley.com/*",
-    "*://*.wiley.com/*"
+    "*://*.wiley.com/*",
+    "*://*.tandfonline.com/*",
+    "*://ascelibrary.org/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
