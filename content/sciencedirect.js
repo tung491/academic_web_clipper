@@ -1,12 +1,11 @@
 // content/sciencedirect.js
-// Injected on-demand by the service worker into ScienceDirect paper pages.
+// ScienceDirect extraction. Injected after content/shared.js.
 
 (async function extractPaper() {
   try {
     const metadata = extractMetadata();
     const sections = extractSections();
     const figures = await extractFigures();
-
     sendExtractionResult({ metadata, sections, figures });
   } catch (err) {
     sendExtractionError(err.message);
@@ -14,44 +13,33 @@
 })();
 
 function extractMetadata() {
-  // Title
   const title =
     document.querySelector('h1.title-text span.title-text')?.textContent?.trim() ||
     document.querySelector('h1.title-text')?.textContent?.trim() ||
     document.querySelector('meta[name="citation_title"]')?.content?.trim() ||
     'Untitled';
 
-  // Authors
   const authorElements = document.querySelectorAll('.author span.text');
   let authors = [...authorElements].map(el => el.textContent.trim()).filter(Boolean);
   if (authors.length === 0) {
     authors = [...document.querySelectorAll('meta[name="citation_author"]')]
-      .map(el => el.content.trim())
-      .filter(Boolean);
+      .map(el => el.content.trim()).filter(Boolean);
   }
 
-  // Abstract
   const abstractEl =
-    document.querySelector('.abstract.author .u-font-serif p') ||
+    document.querySelector('[id*="abspara"]') ||
+    document.querySelector('.abstract div') ||
     document.querySelector('#abstracts p');
   const abstract = abstractEl?.textContent?.trim() || '';
 
-  // DOI
   const doi = document.querySelector('meta[name="citation_doi"]')?.content?.trim() || '';
-
-  // Date
-  const date =
-    document.querySelector('meta[name="citation_publication_date"]')?.content?.trim() || '';
-
-  // Venue
+  const date = document.querySelector('meta[name="citation_publication_date"]')?.content?.trim() || '';
   const venue =
     document.querySelector('meta[name="citation_journal_title"]')?.content?.trim() ||
-    document.querySelector('.publication-title-link')?.textContent?.trim() ||
-    '';
+    document.querySelector('.publication-title-link')?.textContent?.trim() || '';
 
-  // Keywords
-  const keywordEls = document.querySelectorAll('.keyword span');
-  const keywords = [...keywordEls].map(el => el.textContent.trim()).filter(Boolean);
+  const keywords = [...document.querySelectorAll('.keyword span')]
+    .map(el => el.textContent.trim()).filter(Boolean);
 
   return { title, authors, abstract, doi, date, venue, keywords };
 }
@@ -59,9 +47,10 @@ function extractMetadata() {
 function extractSections() {
   const sections = [];
 
-  // Abstract as the first section
+  // Abstract
   const abstractEl =
-    document.querySelector('.abstract.author .u-font-serif p') ||
+    document.querySelector('[id*="abspara"]') ||
+    document.querySelector('.abstract div') ||
     document.querySelector('#abstracts p');
   if (abstractEl) {
     sections.push({
@@ -70,8 +59,8 @@ function extractSections() {
     });
   }
 
-  // Body — ScienceDirect uses #body or .Body as the article body container.
-  // Walk direct children collecting h2/h3 headings and p paragraphs.
+  // Body — ScienceDirect uses #body or .Body
+  // Text content is in <div class="u-margin-s-bottom"> not <p>
   const bodyEl = document.querySelector('#body, .Body');
   if (bodyEl) {
     let currentHeading = 'Introduction';
@@ -84,33 +73,31 @@ function extractSections() {
       currentContent = [];
     };
 
-    // Recursively walk all descendant nodes in DOM order
-    const walker = document.createTreeWalker(
-      bodyEl,
-      NodeFilter.SHOW_ELEMENT,
-      null
-    );
-
+    const walker = document.createTreeWalker(bodyEl, NodeFilter.SHOW_ELEMENT, null);
     let node = walker.nextNode();
+
     while (node) {
       const tag = node.tagName;
 
       if (tag === 'H2' || tag === 'H3') {
         flush();
         currentHeading = node.textContent.trim() || 'Untitled Section';
+      } else if (tag === 'DIV' && node.classList.contains('u-margin-s-bottom')) {
+        const text = node.textContent.trim();
+        if (text && text.length > 10) {
+          currentContent.push({ type: 'paragraph', text });
+        }
       } else if (tag === 'P') {
         const text = node.textContent.trim();
-        if (text) {
+        if (text && text.length > 10) {
           currentContent.push({ type: 'paragraph', text });
         }
       } else if (tag === 'FIGURE') {
-        // Note figure reference by src of its image child
         const img = node.querySelector('img');
         const src = img?.getAttribute('data-src') || img?.src || '';
-        if (src) {
-          currentContent.push({ type: 'figure', figureId: src });
+        if (src && !/clear\.gif|1x1|blank/i.test(src)) {
+          currentContent.push({ type: 'figure', figureId: new URL(src, location.href).href });
         }
-        // Skip TreeWalker into this subtree — we've handled it
         node = walker.nextSibling() || walker.nextNode();
         continue;
       }
@@ -121,10 +108,8 @@ function extractSections() {
     flush();
   }
 
-  // References section
-  const refEls = document.querySelectorAll(
-    '.reference .contribution, .bib-reference'
-  );
+  // References
+  const refEls = document.querySelectorAll('.reference .contribution, .bib-reference, [name="bibliography"] li');
   if (refEls.length > 0) {
     const refContent = [...refEls].map((ref, i) => ({
       type: 'paragraph',
@@ -138,38 +123,24 @@ function extractSections() {
 
 async function extractFigures() {
   const figures = [];
-
-  // Collect candidate figure images: figures in .figure wrappers or lazy-load class
-  const imgEls = document.querySelectorAll('.figure img, img.imgLazyJSB');
-
-  // Deduplicate by resolved URL so .figure img and imgLazyJSB don't double-count
   const seen = new Set();
+  const figEls = document.querySelectorAll('figure img, .figure img, img.imgLazyJSB');
 
-  for (const img of imgEls) {
-    // Prefer the lazy-load data-src over the already-loaded src
+  for (const img of figEls) {
     const rawSrc = img.getAttribute('data-src') || img.src || '';
     if (!rawSrc) continue;
 
-    // Resolve relative URLs
     const url = new URL(rawSrc, location.href).href;
-
-    // Skip transparent placeholder GIFs (clear.gif, 1x1 pixels, etc.)
     if (/clear\.gif|1x1|blank\.gif/i.test(url)) continue;
-
-    // Deduplicate
     if (seen.has(url)) continue;
     seen.add(url);
 
-    // Scroll into view to trigger lazy loading, then wait for the image to decode
     img.scrollIntoView({ behavior: 'instant', block: 'center' });
     await new Promise(r => setTimeout(r, 500));
 
-    // Caption: prefer .captions inside the enclosing .figure, fall back to figcaption
     const container = img.closest('.figure') || img.closest('figure') || img.parentElement;
-    const captionEl =
-      container?.querySelector('.captions') ||
-      container?.querySelector('figcaption');
-    let caption = captionEl?.textContent?.trim() || '';
+    const captionEl = container?.querySelector('.captions') || container?.querySelector('figcaption');
+    const caption = captionEl?.textContent?.trim() || '';
 
     const index = figures.length + 1;
     const filename = `fig${index}.png`;
@@ -177,7 +148,6 @@ async function extractFigures() {
     figures.push({ id: url, url, filename, caption });
   }
 
-  // Scroll back to top
   window.scrollTo(0, 0);
   return figures;
 }
