@@ -14,8 +14,8 @@
     "*://arxiv.org/*",
     "*://link.springer.com/*",
     "*://dl.acm.org/*",
-    "*://www.sciencedirect.com/*",
-    "*://www.mdpi.com/*",
+    "*://*.sciencedirect.com/*",
+    "*://*.mdpi.com/*",
     "*://hal.science/*"
   ],
   "action": {
