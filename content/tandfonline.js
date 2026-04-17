@@ -3,11 +3,15 @@
 
 (async function extractPaper() {
   try {
-    // Click all "Display Table" buttons and wait for tables to load
-    await expandAllTables();
-
     var metadata = extractMetadata();
     var sections = extractSections();
+
+    // Extract tables from popups (T&F loads tables dynamically via "Display Table" links)
+    var popupTables = await extractPopupTables();
+    popupTables.forEach(function(t) {
+      sections.push(t);
+    });
+
     var figures = await extractFigures();
     sendExtractionResult({ metadata: metadata, sections: sections, figures: figures });
   } catch (err) {
@@ -15,35 +19,70 @@
   }
 })();
 
-async function expandAllTables() {
-  var buttons = document.querySelectorAll('.tableView a, .show-table, a[href*="showTable"], .tableDownloadOption a');
-  var displayLinks = [];
+async function extractPopupTables() {
+  var results = [];
 
-  // Find links/buttons that say "Display Table"
+  // Find all "Display Table" links
+  var displayLinks = [];
   document.querySelectorAll('.tableView a, .tableView button').forEach(function(el) {
     if (/display\s*table/i.test(el.textContent)) {
-      displayLinks.push(el);
+      // Get caption from the same .tableView container
+      var view = el.closest('.tableView');
+      var captionEl = view ? view.querySelector('.tableCaption, .NLM_caption') : null;
+      var caption = captionEl ? captionEl.textContent.trim() : '';
+      displayLinks.push({ el: el, caption: caption });
     }
   });
 
-  if (displayLinks.length === 0) return;
+  for (var i = 0; i < displayLinks.length; i++) {
+    var link = displayLinks[i];
 
-  // Click each "Display Table" link
-  displayLinks.forEach(function(link) {
-    link.click();
-  });
+    // Count tables before clicking
+    var tablesBefore = document.querySelectorAll('table').length;
 
-  // Wait for tables to load into the DOM
-  await new Promise(function(resolve) {
+    // Click to open popup
+    link.el.click();
+
+    // Wait for a new table or popup to appear
+    var newTable = await waitForNewTable(tablesBefore);
+    if (newTable) {
+      var tableText = extractTableAsText(newTable);
+      if (tableText) {
+        if (link.caption) tableText = link.caption + '\n' + tableText;
+        results.push({ heading: 'Tables', content: [{ type: 'paragraph', text: tableText }] });
+      }
+    }
+
+    // Close the popup — look for close button
+    var closeBtn = document.querySelector('.mfp-close, .popup-close, [class*="close"], button[aria-label="Close"]');
+    if (closeBtn) {
+      closeBtn.click();
+      await new Promise(function(r) { setTimeout(r, 500); });
+    } else {
+      // Press Escape to close
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27 }));
+      await new Promise(function(r) { setTimeout(r, 500); });
+    }
+  }
+
+  return results;
+}
+
+function waitForNewTable(countBefore) {
+  return new Promise(function(resolve) {
     var attempts = 0;
     var interval = setInterval(function() {
       attempts++;
-      var tables = document.querySelectorAll('table');
-      if (tables.length >= displayLinks.length || attempts > 20) {
+      var allTables = document.querySelectorAll('table');
+      if (allTables.length > countBefore) {
         clearInterval(interval);
-        resolve();
+        // Return the newest table (last one)
+        resolve(allTables[allTables.length - 1]);
+      } else if (attempts > 20) {
+        clearInterval(interval);
+        resolve(null);
       }
-    }, 500);
+    }, 300);
   });
 }
 
