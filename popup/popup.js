@@ -4,6 +4,7 @@ const supportedView = document.getElementById('supported-view');
 const unsupportedView = document.getElementById('unsupported-view');
 const paperTitle = document.getElementById('paper-title');
 const savePathInput = document.getElementById('save-path');
+const useSaveAsCheckbox = document.getElementById('use-save-as');
 const clipBtn = document.getElementById('clip-btn');
 const progressDiv = document.getElementById('progress');
 const progressText = document.getElementById('progress-text');
@@ -20,12 +21,14 @@ const SUPPORTED_PATTERNS = [
   /onlinelibrary\.wiley\.com/,
   /tandfonline\.com/,
   /ascelibrary\.org/,
+  /emerald\.com/,
 ];
 
 const ARXIV_ABSTRACT = /arxiv\.org\/abs\//;
 
-chrome.storage.sync.get(['defaultSavePath'], (result) => {
+chrome.storage.sync.get(['defaultSavePath', 'useSaveAs'], (result) => {
   savePathInput.value = result.defaultSavePath || 'Papers';
+  useSaveAsCheckbox.checked = result.useSaveAs || false;
 });
 
 chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
@@ -46,7 +49,8 @@ clipBtn.addEventListener('click', () => {
   resultDiv.style.display = 'none';
   progressText.textContent = 'Starting...';
   const savePath = savePathInput.value.trim();
-  chrome.runtime.sendMessage({ type: 'clip', savePath });
+  const useSaveAs = useSaveAsCheckbox.checked;
+  chrome.runtime.sendMessage({ type: 'clip', savePath, useSaveAs });
 });
 
 chrome.runtime.onMessage.addListener((message) => {

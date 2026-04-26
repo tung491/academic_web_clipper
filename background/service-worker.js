@@ -11,16 +11,17 @@ const PUBLISHERS = [
   { name: 'Wiley',          pattern: /onlinelibrary\.wiley\.com/, script: 'content/wiley.js' },
   { name: 'T&F Online',    pattern: /tandfonline\.com/,           script: 'content/tandfonline.js' },
   { name: 'ASCE Library',  pattern: /ascelibrary\.org/,           script: 'content/asce.js' },
+  { name: 'Emerald',       pattern: /emerald\.com/,               script: 'content/emerald.js' },
 ];
 
 // Listen for clip requests from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'clip') {
-    handleClip(message.savePath);
+    handleClip(message.savePath, message.useSaveAs);
   }
 });
 
-async function handleClip(savePath) {
+async function handleClip(savePath, useSaveAs) {
   try {
     sendProgress('extracting');
 
@@ -90,7 +91,7 @@ async function handleClip(savePath) {
       ? `${savePath}/${safeName}_${timestamp}.zip`
       : `${safeName}_${timestamp}.zip`;
 
-    await downloadFile(zipDataUrl, zipFilename);
+    await downloadFile(zipDataUrl, zipFilename, useSaveAs);
 
     sendProgress('done', `Clipped "${metadata.title}" with ${imageCount} images`);
 
@@ -134,9 +135,9 @@ function injectAndWaitForResult(tabId, scriptPath) {
   });
 }
 
-function downloadFile(url, filename) {
+function downloadFile(url, filename, saveAs = false) {
   return new Promise((resolve, reject) => {
-    chrome.downloads.download({ url, filename, saveAs: false }, (downloadId) => {
+    chrome.downloads.download({ url, filename, saveAs }, (downloadId) => {
       if (chrome.runtime.lastError) {
         return reject(new Error(chrome.runtime.lastError.message));
       }

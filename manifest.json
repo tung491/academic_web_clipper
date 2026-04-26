@@ -21,7 +21,9 @@
     "*://onlinelibrary.wiley.com/*",
     "*://*.wiley.com/*",
     "*://*.tandfonline.com/*",
-    "*://ascelibrary.org/*"
+    "*://ascelibrary.org/*",
+    "*://*.emerald.com/*",
+    "*://emer.silverchair-cdn.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
