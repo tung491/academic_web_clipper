@@ -20,7 +20,7 @@ This extension is not on the Chrome Web Store. Install it as an unpacked extensi
 
 1. Clone or download this repository to a permanent location:
    ```
-   git clone https://github.com/<your-fork>/academic_web_clipper.git
+   git clone https://github.com/tung491/academic_web_clipper.git
    ```
    Don't delete or move this folder after loading — Chrome reads files from it on every browser start.
 
