@@ -72,8 +72,25 @@ describe('toMarkdown', () => {
       ]
     };
     const md = toMarkdown(data);
-    assert.ok(md.includes('![[fig1.png]]'));
+    assert.ok(md.includes('![[images/fig1.png]]'));
     assert.ok(md.includes('*Figure 1: System architecture*'));
+  });
+
+  it('uses images/ path for failed figures so the placeholder resolves alongside real images', () => {
+    const data = {
+      metadata: sampleData.metadata,
+      sections: [
+        {
+          heading: 'I. Intro',
+          content: [{ type: 'figure', figureId: 'fig1' }]
+        }
+      ],
+      figures: [
+        { id: 'fig1', filename: 'fig1.png', caption: '', failed: true }
+      ]
+    };
+    const md = toMarkdown(data);
+    assert.ok(md.includes('![[images/fig_missing.png]]'));
   });
 
   it('handles sections with no content gracefully', () => {

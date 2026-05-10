@@ -72,30 +72,38 @@ function extractSections() {
     if (!heading) return;
 
     var content = [];
+    var seenParagraphs = new Set();
+    var seenFigureUrls = new Set();
     var sibling = headingEl.nextElementSibling;
+
+    function pushParagraph(text) {
+      if (!text || seenParagraphs.has(text)) return;
+      seenParagraphs.add(text);
+      content.push({ type: 'paragraph', text: text });
+    }
+
+    function pushFigure(url) {
+      if (!url || seenFigureUrls.has(url)) return;
+      seenFigureUrls.add(url);
+      content.push({ type: 'figure', figureId: url });
+    }
 
     while (sibling && !sibling.matches('h2, h3')) {
       if (sibling.matches('p')) {
-        var pText = sibling.textContent.trim();
-        if (pText) content.push({ type: 'paragraph', text: pText });
+        pushParagraph(sibling.textContent.trim());
       } else if (sibling.matches('.table-wrap')) {
         var table = sibling.querySelector('.table-overflow table');
-        if (table) {
-          var tableText = extractTableAsText(table);
-          if (tableText) content.push({ type: 'paragraph', text: tableText });
-        }
+        if (table) pushParagraph(extractTableAsText(table));
       } else if (sibling.matches('div, section')) {
         sibling.querySelectorAll('p').forEach(function(p) {
-          var pText = p.textContent.trim();
-          if (pText) content.push({ type: 'paragraph', text: pText });
+          pushParagraph(p.textContent.trim());
         });
         sibling.querySelectorAll('img.content-image').forEach(function(img) {
           var src = img.getAttribute('data-src') || img.src;
-          if (src) content.push({ type: 'figure', figureId: normalizeUrl(src) });
+          if (src) pushFigure(normalizeUrl(src));
         });
         sibling.querySelectorAll('.table-wrap .table-overflow table').forEach(function(table) {
-          var tableText = extractTableAsText(table);
-          if (tableText) content.push({ type: 'paragraph', text: tableText });
+          pushParagraph(extractTableAsText(table));
         });
       }
 
