@@ -23,7 +23,9 @@
     "*://*.tandfonline.com/*",
     "*://ascelibrary.org/*",
     "*://*.emerald.com/*",
-    "*://emer.silverchair-cdn.com/*"
+    "*://emer.silverchair-cdn.com/*",
+    "*://journals.sagepub.com/*",
+    "*://*.sagepub.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",

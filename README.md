@@ -13,6 +13,7 @@ A Chrome extension that clips academic papers from publisher websites into Obsid
 - Taylor & Francis Online (`tandfonline.com`)
 - ASCE Library (`ascelibrary.org`)
 - Emerald Insight (`emerald.com`)
+- SAGE Journals (`journals.sagepub.com`)
 
 ## Install (Chrome / Chromium / Edge / Brave)
 
@@ -89,7 +90,7 @@ keywords: [kw1, kw2, ...]
 | **Scope** | Per-publisher DOM extractors hand-tuned for IEEE, arXiv, Springer, etc. | Generic content extraction (Readability-style) for any web page. |
 | **Figures** | Downloads every figure as a real file, bundled in a zip alongside the markdown. Uses `[[fig_1.png]]` wikilinks. | Embeds images as remote URLs or relies on Obsidian's image-download settings; less reliable on paywalled CDNs. |
 | **CORS / paywalled images** | Service worker fetches images using extension `host_permissions`, bypassing the browser's CORS restrictions for publisher CDNs (e.g. `ars.els-cdn.com`, `media.springernature.com`). | Browser-context fetch; often blocked by publisher CDNs that disallow cross-origin requests. |
-| **Section structure** | Reconstructs publisher-specific section hierarchy (e.g. IEEE `div.section`, arXiv `ltx_section`, T&F numbered sections with table positions preserved). | Flat content extraction; section boundaries can collapse. |
+| **Section structure** | Reconstructs publisher-specific section hierarchy (e.g. IEEE `div.section`, arXiv `ltx_section`, T&F numbered sections with table positions preserved, SAGE/ASCE Atypon `section#bodymatter` with appendices and bibliography). | Flat content extraction; section boundaries can collapse. |
 | **Metadata** | Pulls DOI, authors, venue, publication date, keywords from publisher meta tags into structured YAML frontmatter, plus an `inline_author` field for citation use. | Extracts generic Open Graph / page metadata; not academic-aware. |
 | **Output** | A single `.zip` saved to Downloads (markdown + `images/` folder). You unzip into your vault. | Saves directly into the vault via Obsidian URI / connector. |
 | **Vault integration** | None — file-based; works without Obsidian running. | Tight integration; saves into the active vault directly. |

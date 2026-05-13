@@ -22,6 +22,7 @@ const SUPPORTED_PATTERNS = [
   /tandfonline\.com/,
   /ascelibrary\.org/,
   /emerald\.com/,
+  /journals\.sagepub\.com/,
 ];
 
 const ARXIV_ABSTRACT = /arxiv\.org\/abs\//;

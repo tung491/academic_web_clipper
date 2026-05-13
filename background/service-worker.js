@@ -12,6 +12,7 @@ const PUBLISHERS = [
   { name: 'T&F Online',    pattern: /tandfonline\.com/,           script: 'content/tandfonline.js' },
   { name: 'ASCE Library',  pattern: /ascelibrary\.org/,           script: 'content/asce.js' },
   { name: 'Emerald',       pattern: /emerald\.com/,               script: 'content/emerald.js' },
+  { name: 'SAGE Journals', pattern: /journals\.sagepub\.com/,     script: 'content/sagepub.js' },
 ];
 
 // Listen for clip requests from popup
@@ -49,15 +50,20 @@ async function handleClip(savePath, useSaveAs) {
     const failedFigures = [];
 
     for (const fig of figures) {
-      if (fig.url) {
-        try {
-          const binary = await fetchImageAsUint8Array(fig.url);
-          zipFiles.push({ name: `images/${fig.filename}`, data: binary });
-          imageCount++;
-        } catch (err) {
-          console.warn(`Failed to fetch ${fig.filename}:`, err);
-          failedFigures.push(fig.id);
-        }
+      let binary = null;
+      // Prefer bytes fetched by the content script (needed for Cloudflare-fronted
+      // CDNs like SAGE that block cross-origin reads via cross-origin-resource-policy).
+      if (fig.dataBase64) {
+        try { binary = base64ToUint8Array(fig.dataBase64); }
+        catch (err) { console.warn(`Bad base64 for ${fig.filename}:`, err); }
+      }
+      if (!binary && fig.url) {
+        try { binary = await fetchImageAsUint8Array(fig.url); }
+        catch (err) { console.warn(`Failed to fetch ${fig.filename}:`, err); }
+      }
+      if (binary) {
+        zipFiles.push({ name: `images/${fig.filename}`, data: binary });
+        imageCount++;
       } else {
         failedFigures.push(fig.id);
       }
@@ -157,10 +163,20 @@ function downloadFile(url, filename, saveAs = false) {
 }
 
 async function fetchImageAsUint8Array(url) {
-  const response = await fetch(url);
+  // credentials: 'include' sends the user's publisher cookies (cf_clearance, session, etc.).
+  // Without them, Cloudflare-fronted CDNs (SAGE, ASCE, Wiley) return a 403 challenge page.
+  const response = await fetch(url, { credentials: 'include' });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const buffer = await response.arrayBuffer();
   return new Uint8Array(buffer);
+}
+
+function base64ToUint8Array(b64) {
+  const binary = atob(b64);
+  const len = binary.length;
+  const out = new Uint8Array(len);
+  for (let i = 0; i < len; i++) out[i] = binary.charCodeAt(i);
+  return out;
 }
 
 function uint8ArrayToBase64(bytes) {
